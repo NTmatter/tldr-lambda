@@ -1,17 +1,16 @@
 [package]
-name = "tangy"
+name = "tldr-lambda"
 description = "Tang server implementation"
-version = "0.2.6"
+version = "0.1.0"
 edition = "2021"
 license = "MIT OR Apache-2.0"
-authors = ["Martyn P <martyn@datasync.dev>"]
-repository = "https://github.com/martynp/tangy"
-readme = "readme.md"
+authors = ["Thomas Johnson <NTmatter@gmail.com>", "Martyn P <martyn@datasync.dev>"]
+repository = "https://github.com/NTmatter/tldr-lambda"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
 clap = { version = "4.5.4", features = ["derive"] }
 rocket = "0.5.0"
-tangy-lib = "0.1"
-#tangy-lib = { path = "../tangy-lib" }
+# tldr-lib = "0.1"
+tldr-lib = { path = "../tldr-lib" }

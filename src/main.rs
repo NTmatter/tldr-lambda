@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
 #[macro_use]
 extern crate rocket;
 
@@ -6,7 +8,7 @@ use std::sync::RwLock;
 use clap::Parser;
 use rocket::http::{ContentType, Status};
 use rocket::State;
-use tangy_lib::{KeySource, TangyLib};
+use tldr_lib::{KeySource, TangyLib};
 
 struct TangState {
     pub state: RwLock<TangyLib>,
