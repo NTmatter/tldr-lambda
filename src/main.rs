@@ -1,89 +1,88 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-#[macro_use]
-extern crate rocket;
-
-use std::future::Future;
 use std::path::PathBuf;
 use std::sync::{Arc, RwLock};
-use std::task::{Context, Poll};
-use clap::Parser;
-use lambda_http::{Body, Error, http::Uri, Request, Response, run, service_fn, tracing, IntoResponse, Service};
-use lambda_http::http::StatusCode;
-use lambda_http::tracing::init_default_subscriber;
-use rocket::http::{ContentType, Status};
-use rocket::State;
-use tldr_lib::{KeySource, TangyLib};
 
+use axum::http::HeaderName;
+use axum::{
+    extract::{Path, State},
+    response::IntoResponse,
+    response::Json,
+    routing::{get, post},
+    Router,
+};
+use clap::Parser;
+use lambda_http::tracing::{self, init_default_subscriber};
+use lambda_http::{http::header, http::StatusCode, run, Error};
+use tldr_lib::{KeySource, MyJwkEcKey, TangyLib};
+
+#[derive(Clone)]
 struct TangState {
-    pub state: RwLock<TangyLib>,
+    pub state: Arc<RwLock<TangyLib>>,
 }
 
-#[get("/adv")]
-fn adv(tangy_state: &State<TangState>) -> (Status, (ContentType, Option<String>)) {
+// Refer to https://github.com/awslabs/aws-lambda-rust-runtime/blob/main/examples/http-axum-diesel/src/main.rs
+
+const CONTENT_TYPE_JOSE_JSON: [(HeaderName, &str); 1] =
+    [(header::CONTENT_TYPE, "application/jose+json")];
+
+// #[get("/adv")]
+#[axum::debug_handler]
+async fn adv(State(tangy_state): State<TangState>) -> Result<impl IntoResponse, impl IntoResponse> {
     let tangy = tangy_state.state.read().unwrap();
 
     match tangy.adv(None) {
-        Ok(a) => (
-            Status::Ok,
-            (ContentType::new("application", "jose+json"), Some(a)),
-        ),
-
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => (
-            Status::NotFound,
-            (ContentType::new("application", "jose+json"), None),
-        ),
-
-        Err(_) => (
-            Status::InternalServerError,
-            (ContentType::new("application", "jose+json"), None),
-        ),
+        Ok(a) => Ok((StatusCode::OK, CONTENT_TYPE_JOSE_JSON, a)),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+            Err((StatusCode::NOT_FOUND, CONTENT_TYPE_JOSE_JSON, e.to_string()))
+        }
+        Err(e) => Err((
+            StatusCode::INTERNAL_SERVER_ERROR,
+            CONTENT_TYPE_JOSE_JSON,
+            // TODO Log and Redact internal error
+            e.to_string(),
+        )),
     }
 }
 
-#[get("/adv/<skid>")]
-fn adv_kid(skid: &str, tangy_state: &State<TangState>) -> (Status, (ContentType, Option<String>)) {
+// get("/adv/<skid>")
+async fn adv_kid(
+    State(tangy_state): State<TangState>,
+    Path(skid): Path<String>,
+) -> Result<impl IntoResponse, impl IntoResponse> {
     let tangy = tangy_state.state.read().unwrap();
 
-    match tangy.adv(Some(skid)) {
-        Ok(a) => (
-            Status::Ok,
-            (ContentType::new("application", "jose+json"), Some(a)),
-        ),
-
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => (
-            Status::NotFound,
-            (ContentType::new("application", "jose+json"), None),
-        ),
-        Err(_) => (
-            Status::InternalServerError,
-            (ContentType::new("application", "jose+json"), None),
-        ),
+    match tangy.adv(Some(&skid)) {
+        Ok(a) => Ok((StatusCode::OK, CONTENT_TYPE_JOSE_JSON, a)),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+            Err((StatusCode::NOT_FOUND, CONTENT_TYPE_JOSE_JSON, e.to_string()))
+        }
+        Err(e) => Err((
+            StatusCode::INTERNAL_SERVER_ERROR,
+            CONTENT_TYPE_JOSE_JSON,
+            e.to_string(),
+        )),
     }
 }
 
-#[post("/rec/<kid>", data = "<data>")]
-fn rec(
-    kid: &str,
-    data: &str,
-    tangy_state: &State<TangState>,
-) -> (Status, (ContentType, Option<String>)) {
+// post("/rec/<kid>", data = "<data>")
+async fn rec(
+    State(tangy_state): State<TangState>,
+    Path(kid): Path<String>,
+    data: String,
+) -> Result<impl IntoResponse, impl IntoResponse> {
     let tangy = tangy_state.state.read().unwrap();
 
-    match tangy.rec(kid, data) {
-        Ok(r) => (
-            Status::Ok,
-            (ContentType::new("application", "jwk+json"), Some(r)),
-        ),
-
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => (
-            Status::NotFound,
-            (ContentType::new("application", "jose+json"), None),
-        ),
-        Err(_) => (
-            Status::InternalServerError,
-            (ContentType::new("application", "jose+json"), None),
-        ),
+    match tangy.rec(kid.as_str(), data.as_str()) {
+        Ok(a) => Ok((StatusCode::OK, CONTENT_TYPE_JOSE_JSON, a)),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+            Err((StatusCode::NOT_FOUND, CONTENT_TYPE_JOSE_JSON, e.to_string()))
+        }
+        Err(e) => Err((
+            StatusCode::INTERNAL_SERVER_ERROR,
+            CONTENT_TYPE_JOSE_JSON,
+            e.to_string(),
+        )),
     }
 }
 
@@ -96,28 +95,6 @@ struct Args {
     dir: PathBuf,
 }
 
-async fn function_handler(event: Request) -> Result<(StatusCode, String), Error> {
-    // Identify path and components
-    let uri = event.uri();
-    let mut components = uri.path().split('/');
-
-    // Consume prefix if present.
-    // for _ in self.prefix {
-    //    components.next();
-    // }
-    let endpoint = components.next();
-    let arg = components.next();
-
-    match (endpoint, arg) {
-        (Some("adv"), None) => {},
-        (Some("adv"), Some(_skid)) => {},
-        (Some("rec"), None) => {},
-        (_, _) => todo!("404 Error")
-    }
-
-    todo!()
-}
-
 #[tokio::main]
 async fn main() -> Result<(), Error> {
     let args = Args::parse();
@@ -125,11 +102,16 @@ async fn main() -> Result<(), Error> {
     init_default_subscriber();
 
     let tangy_state = TangState {
-        state: RwLock::new(TangyLib::init(KeySource::LocalDir(&args.dir)).unwrap()),
+        state: Arc::new(RwLock::new(
+            TangyLib::init(KeySource::LocalDir(&args.dir)).unwrap(),
+        )),
     };
 
-    let foo = Arc::new(RwLock::new(()));
-    run(service_fn(function_handler)).await?;
+    let app = Router::new()
+        .route("/adv/{skid}", get(adv_kid))
+        .route("/adv", get(adv))
+        .route("/rec/{kid}", post(rec))
+        .with_state(tangy_state);
 
-    Ok(())
+    run(app).await
 }

@@ -10,9 +10,10 @@ repository = "https://github.com/NTmatter/tldr-lambda"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+axum = { version = "0.8.1", features = ["macros"] }
 clap = { version = "4.5.4", features = ["derive", "env"] }
+elliptic-curve = { version = "0.13.8", features = ["jwk"] }
 lambda_http = "0.14.0"
-rocket = "0.5.0"
 # tldr-lib = "0.1"
 tldr-lib = { path = "../tldr-lib" }
 tokio = { version = "1.43.0", features = ["macros", "sync"] }
