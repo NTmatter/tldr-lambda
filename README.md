@@ -6,7 +6,7 @@ An inexpensive high-availability/fault-tolerant Tang server in AWS.
 
 The TLDR Lambda is a fork and reimplementation of Martyn P's [Tangy](https://github.com/martynp/tangy), which is itself a reimplementation of Latchset's [Tang](https://github.com/latchset/tang) server.
 
-TLDR focuses on creating a highly-available fault-tolerant service, where the original Tang and Tangy are standalone services.
+TLDR focuses on creating a highly-available fault-tolerant service, where the original Tang and Tangy are standalone services. This approach runs counter to the [official guidance](https://github.com/latchset/tang/blob/master/doc/tang.8.adoc#high-availability) which recommends binding clients to multiple servers, however the increased uptime and resilience is a desirable side effect of pushing keys into an external backend. Clients may still bind to multiple instances for increased diversity.
 
 The Tang protocol allows clients to store secrets which can only be recovered when they have access to the Tang server. For example, the Clevis tools allows the automated decryption of LUKS partitions when the encrypted device is connected to the local network that Tang is accessible on.
 

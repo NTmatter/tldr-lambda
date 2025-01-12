@@ -3,9 +3,14 @@
 #[macro_use]
 extern crate rocket;
 
-use std::sync::RwLock;
-
+use std::future::Future;
+use std::path::PathBuf;
+use std::sync::{Arc, RwLock};
+use std::task::{Context, Poll};
 use clap::Parser;
+use lambda_http::{Body, Error, http::Uri, Request, Response, run, service_fn, tracing, IntoResponse, Service};
+use lambda_http::http::StatusCode;
+use lambda_http::tracing::init_default_subscriber;
 use rocket::http::{ContentType, Status};
 use rocket::State;
 use tldr_lib::{KeySource, TangyLib};
@@ -85,32 +90,46 @@ fn rec(
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
 struct Args {
-    /// location of certificates database
-    #[arg(short, long)]
-    dir: std::path::PathBuf,
-
-    /// Number of times to greet
-    #[arg(short, long, default_value_t = 8000)]
-    port: u16,
-
-    /// Server bind address
-    #[arg(short, long, default_value = "0.0.0.0")]
-    address: String,
+    // TODO change path to a Uri to allow dispatching to various backends
+    /// Database connection URI for Key Vault
+    #[arg(short, long, env = "DATABASE_URI")]
+    dir: PathBuf,
 }
 
-#[launch]
-fn rocket() -> _ {
+async fn function_handler(event: Request) -> Result<(StatusCode, String), Error> {
+    // Identify path and components
+    let uri = event.uri();
+    let mut components = uri.path().split('/');
+
+    // Consume prefix if present.
+    // for _ in self.prefix {
+    //    components.next();
+    // }
+    let endpoint = components.next();
+    let arg = components.next();
+
+    match (endpoint, arg) {
+        (Some("adv"), None) => {},
+        (Some("adv"), Some(_skid)) => {},
+        (Some("rec"), None) => {},
+        (_, _) => todo!("404 Error")
+    }
+
+    todo!()
+}
+
+#[tokio::main]
+async fn main() -> Result<(), Error> {
     let args = Args::parse();
+
+    init_default_subscriber();
 
     let tangy_state = TangState {
         state: RwLock::new(TangyLib::init(KeySource::LocalDir(&args.dir)).unwrap()),
     };
 
-    let figment = rocket::Config::figment()
-        .merge(("port", args.port))
-        .merge(("address", args.address));
+    let foo = Arc::new(RwLock::new(()));
+    run(service_fn(function_handler)).await?;
 
-    rocket::custom(figment)
-        .manage(tangy_state)
-        .mount("/", routes![adv, adv_kid, rec])
+    Ok(())
 }
