@@ -108,9 +108,12 @@ async fn main() -> Result<(), Error> {
     };
 
     let app = Router::new()
-        .route("/adv/{skid}", get(adv_kid))
         .route("/adv", get(adv))
+        .route("/adv/", get(adv))
+        .route("/adv/{skid}", get(adv_kid))
+        .route("/adv/{skid}/", get(adv_kid))
         .route("/rec/{kid}", post(rec))
+        .route("/rec/{kid}/", post(rec))
         .with_state(tangy_state);
 
     run(app).await
