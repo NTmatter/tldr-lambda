@@ -1,20 +1,19 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-use std::path::PathBuf;
-use std::sync::{Arc, RwLock};
-
 use axum::http::HeaderName;
 use axum::{
     extract::{Path, State},
     response::IntoResponse,
-    response::Json,
     routing::{get, post},
     Router,
 };
 use clap::Parser;
-use lambda_http::tracing::{self, init_default_subscriber};
+use lambda_http::tracing::init_default_subscriber;
 use lambda_http::{http::header, http::StatusCode, run, Error};
-use tldr_lib::{KeySource, MyJwkEcKey, TangyLib};
+use std::sync::{Arc, RwLock};
+use std::time::Duration;
+use tldr_lib::{backend::Backends, KeySource, TangyLib};
+use url::Url;
 
 #[derive(Clone)]
 struct TangState {
@@ -89,21 +88,49 @@ async fn rec(
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
 struct Args {
-    // TODO change path to a Uri to allow dispatching to various backends
-    /// Database connection URI for Key Vault
-    #[arg(short, long, env = "DATABASE_URI")]
-    dir: PathBuf,
+    // TODO Get list of supported backends
+    /// URL for key database.
+    #[arg(short, long, env = "DATABASE_URL")]
+    db: Url,
+
+    /// Cache lifetime for retrieved keys, in seconds.
+    ///
+    /// No caching will be performed if duration is zero or unspecified,
+    /// which may put significant strain on the database depending on client
+    /// activity. Setting this too high may result in skew during key rotation.
+    #[arg(short, long, env = "CACHE_SECONDS")]
+    cache_seconds: Option<f32>,
 }
 
 #[tokio::main]
 async fn main() -> Result<(), Error> {
-    let args = Args::parse();
-
+    let Args { db, cache_seconds } = Args::parse();
     init_default_subscriber();
+
+    let Some(backend) = Backends::for_url(&db) else {
+        return Err(format!("Unknown backend for {db}"))?;
+    };
+    let _cache_duration = match cache_seconds {
+        None => None,
+        Some(0f32) => None,
+        Some(seconds) if seconds.is_sign_negative() => {
+            return Err("Cache duration must be positive")?;
+        }
+        Some(seconds) => Some(Duration::from_secs_f32(seconds)),
+    };
+
+    // WIP Stick with Directory backend until some others have been added.
+    if backend != Backends::Directory {
+        return Err("WIP: Only file:// scheme is currently supported.")?;
+    };
+
+    let key_dir = db
+        .to_file_path()
+        .expect("Failed to convert path to file path");
 
     let tangy_state = TangState {
         state: Arc::new(RwLock::new(
-            TangyLib::init(KeySource::LocalDir(&args.dir)).unwrap(),
+            TangyLib::init(KeySource::LocalDir(&key_dir)).unwrap(),
         )),
     };
 

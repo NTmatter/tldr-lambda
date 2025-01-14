@@ -17,3 +17,4 @@ lambda_http = "0.14.0"
 # tldr-lib = "0.1"
 tldr-lib = { path = "../tldr-lib" }
 tokio = { version = "1.43.0", features = ["macros", "sync"] }
+url = { version = "2.5.4", features = ["serde"] }

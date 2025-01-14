@@ -1399,6 +1399,7 @@ dependencies = [
  "lambda_http",
  "tldr-lib",
  "tokio",
+ "url",
 ]
 
 [[package]]
@@ -1411,6 +1412,7 @@ dependencies = [
  "serde",
  "serde_json",
  "sha2",
+ "url",
 ]
 
 [[package]]
@@ -1582,6 +1584,7 @@ dependencies = [
  "form_urlencoded",
  "idna",
  "percent-encoding",
+ "serde",
 ]
 
 [[package]]
