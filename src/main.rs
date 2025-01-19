@@ -12,7 +12,7 @@ use lambda_http::tracing::init_default_subscriber;
 use lambda_http::{http::header, http::StatusCode, run, Error};
 use std::sync::{Arc, RwLock};
 use std::time::Duration;
-use tldr_lib::{backend::Backends, KeySource, TangyLib};
+use tldr_lib::TangyLib;
 use url::Url;
 
 #[derive(Clone)]
@@ -104,12 +104,13 @@ struct Args {
 
 #[tokio::main]
 async fn main() -> Result<(), Error> {
-    let Args { db, cache_seconds } = Args::parse();
+    let Args {
+        db: db_url,
+        cache_seconds,
+    } = Args::parse();
+
     init_default_subscriber();
 
-    let Some(backend) = Backends::for_url(&db) else {
-        return Err(format!("Unknown backend for {db}"))?;
-    };
     let _cache_duration = match cache_seconds {
         None => None,
         Some(0f32) => None,
@@ -119,19 +120,8 @@ async fn main() -> Result<(), Error> {
         Some(seconds) => Some(Duration::from_secs_f32(seconds)),
     };
 
-    // WIP Stick with Directory backend until some others have been added.
-    if backend != Backends::Directory {
-        return Err("WIP: Only file:// scheme is currently supported.")?;
-    };
-
-    let key_dir = db
-        .to_file_path()
-        .expect("Failed to convert path to file path");
-
     let tangy_state = TangState {
-        state: Arc::new(RwLock::new(
-            TangyLib::init(KeySource::LocalDir(&key_dir)).unwrap(),
-        )),
+        state: Arc::new(RwLock::new(TangyLib::init(&db_url).await.unwrap())),
     };
 
     let app = Router::new()
