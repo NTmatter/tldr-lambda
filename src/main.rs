@@ -121,7 +121,7 @@ async fn main() -> Result<(), Error> {
     };
 
     let tangy_state = TangState {
-        state: Arc::new(RwLock::new(TangyLib::init(&db_url).await.unwrap())),
+        state: Arc::new(RwLock::new(TangyLib::init(&db_url).await?)),
     };
 
     let app = Router::new()
